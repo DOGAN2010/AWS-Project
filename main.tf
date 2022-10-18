@@ -2,10 +2,9 @@
 # NAT INSTANCE
 ###########################
 resource "aws_instance" "nat_instance" {
-  ami           = var.nat-ami
-  instance_type = var.instance_type
-  subnet_id     = aws_subnet.public[1].id
-
+  ami               = var.nat-ami
+  instance_type     = var.instance_type
+  subnet_id         = aws_subnet.public[0].id
   key_name          = var.key_name
   security_groups   = [aws_security_group.nat_security_group.id]
   source_dest_check = false
@@ -24,13 +23,17 @@ resource "aws_launch_template" "tf-lt" {
   image_id               = var.ubuntu_ami
   key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.EC2_security_group.id]
-  user_data              = filebase64("./userdata.sh")
+  user_data = file("userdata.sh")
+  # user_data              = filebase64("./userdata.sh")
   depends_on = [
-    github_repository_file.dbendpoint,
+    github_repository_file.db_endpoint,
     aws_instance.nat_instance
   ]
   iam_instance_profile {
-    name = aws_iam_instance_profile.instance-role.name
+    name = aws_iam_instance_profile.instance-role.id
+  }
+  tags = {
+    Name = "${var.name}-Instance"
   }
 }
 
@@ -38,10 +41,10 @@ resource "aws_launch_template" "tf-lt" {
 #  GİTHUB
 ###########################
 
-resource "github_repository_file" "dbendpoint" {
+resource "github_repository_file" "db_endpoint" {
   content             = aws_db_instance.rds-tf.address
   file                = "src/cblog/dbserver.endpoint"
-  repository          = "aws_project"
+  repository          = "AWS-Project"
   overwrite_on_create = true
   branch              = "main"
 }
@@ -112,6 +115,9 @@ resource "aws_lb" "alb-tf" {
   ip_address_type    = "ipv4"
   security_groups    = [aws_security_group.ALB_security_group.id]
   subnets            = [for subnet in aws_subnet.public : subnet.id]
+  depends_on = [
+    aws_launch_template.tf-lt
+  ]
 }
 
 
@@ -125,6 +131,9 @@ resource "aws_lb_listener" "tf-https" {
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
   certificate_arn   = var.aws_acm_certificate_arn
+  depends_on = [
+    aws_lb.alb-tf
+  ]
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.tf-target.arn
@@ -138,6 +147,9 @@ resource "aws_lb_listener" "tf-http" {
   load_balancer_arn = aws_lb.alb-tf.arn
   port              = "80"
   protocol          = "HTTP"
+  depends_on = [
+    aws_lb.alb-tf
+  ]
   default_action {
     type = "redirect"
 
@@ -160,6 +172,7 @@ resource "aws_lb_target_group" "tf-target" {
   protocol    = "HTTP"
   target_type = "instance"
   vpc_id      = aws_vpc.aws_project.id
+
   health_check {
     protocol            = "HTTP"         # default HTTP
     port                = "traffic-port" # default
@@ -183,7 +196,8 @@ resource "aws_autoscaling_group" "asg-tf" {
   health_check_type         = "ELB"
   target_group_arns         = [aws_lb_target_group.tf-target.arn]
   depends_on = [
-    aws_instance.nat_instance
+    aws_instance.nat_instance,
+    aws_lb.alb-tf
   ]
   vpc_zone_identifier = [for subnet in aws_subnet.private : subnet.id]
   launch_template {
@@ -207,16 +221,15 @@ resource "aws_autoscaling_policy" "policy-tf" {
 #################################
 #  CLOUDFRONT
 ################################
-
-locals {
-  alb_origin_id = "ALBOriginId"
+resource "aws_cloudfront_origin_access_identity" "oai" {
+  comment = "OAI for ${var.subdomain_name}"
 }
 
 resource "aws_cloudfront_distribution" "cf-tf" {
 
   origin {
     domain_name = aws_lb.alb-tf.dns_name
-    origin_id   = local.alb_origin_id
+    origin_id   = aws_lb.alb-tf.id
 
     custom_origin_config {
       http_port                = 80
@@ -237,7 +250,7 @@ resource "aws_cloudfront_distribution" "cf-tf" {
 
 
   default_cache_behavior {
-    target_origin_id       = local.alb_origin_id
+    target_origin_id       = aws_lb.alb-tf.dns_name
     cached_methods         = ["GET", "HEAD", "OPTIONS"]
     allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     viewer_protocol_policy = "redirect-to-https"
@@ -278,8 +291,11 @@ resource "aws_route53_health_check" "tf-health" {
   port             = 80
   fqdn             = aws_cloudfront_distribution.cf-tf.domain_name
   request_interval = 30
+  depends_on = [
+    aws_cloudfront_distribution.cf-tf
+  ]
   tags = {
-    Name = "${var.failover_bucket_name}-healthcheck"
+    Name = "${var.subdomain_name}-healthcheck"
   }
 }
 
@@ -290,20 +306,19 @@ resource "aws_route53_health_check" "tf-health" {
 
 resource "aws_route53_record" "primary" {
   zone_id         = var.hosted_zone_id
-  name            = "capstone"
+  name            = var.domain_sub_name
   type            = "A"
   set_identifier  = "primary"
   health_check_id = aws_route53_health_check.tf-health.id
   depends_on = [
-    aws_cloudfront_distribution.cf-tf
+    aws_route53_health_check.tf-health
   ]
 
   alias {
-    name                   = aws_cloudfront_distribution.cf-tf.domain_name # aws_lb.alb-tf.dns_name # 
-    zone_id                = "Z2FDTNDATAQYW2" # aws_elb.alb-tf.zone_id # 
+    name                   = aws_cloudfront_distribution.cf-tf.domain_name
+    zone_id                = aws_cloudfront_distribution.cf-tf.hosted_zone_id
     evaluate_target_health = false
   }
-
   failover_routing_policy {
     type = "PRIMARY"
   }
@@ -311,14 +326,14 @@ resource "aws_route53_record" "primary" {
 
 resource "aws_route53_record" "secondary" {
   zone_id        = var.hosted_zone_id
-  name           = "${var.name}-capstone"
+  name           = var.domain_sub_name
   set_identifier = "Secondary"
   type           = "A"
   depends_on = [
     aws_cloudfront_distribution.cf-tf
   ]
   alias {
-    name                   = aws_s3_bucket.failover_bucket.id  # "s3-website-us-east-1.amazonaws.com"
+    name                   = aws_s3_bucket.failover_bucket.id             # "s3-website-us-east-1.amazonaws.com"
     zone_id                = aws_s3_bucket.failover_bucket.hosted_zone_id # "Z3AQBSTGFYJSTF"
     evaluate_target_health = true
   }
@@ -458,6 +473,9 @@ resource "aws_lambda_permission" "lambda-invoke" {
   source_arn     = aws_s3_bucket.website_bucket.arn
   source_account = var.awsAccount
   principal      = "s3.amazonaws.com"
+    depends_on = [
+    aws_s3_bucket.website_bucket
+  ]
 }
 
 

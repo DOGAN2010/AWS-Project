@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "github_token" {
   description = "AWS region"
   type        = string
-  default     = "XXXXXXXXXXXXXXXXXXXXXX"
+  default     = "XXXXXXXXXXXXXXXXXXXXXXXXX"
 }
 
 variable "name" {
@@ -33,6 +33,14 @@ variable "azs" {
   type    = list(any)
   default = ["us-east-1a", "us-east-1b"]
 }
+variable "ubuntu_ami" {
+  default = "ami-0c09e99c7d9bb3ec3"
+}
+
+variable "nat-ami" {
+  default = "ami-08c40ec9ead489470"
+}
+
 variable "instance_type" {
   default = "t2.micro"
 }
@@ -100,8 +108,8 @@ variable "password" {
 
 variable "website_bucket_name" {
   type        = string
-  description = "aws_dogan_blog"
-  default     = "aws_dogan_blog"
+  description = "aws_dogan-blog"
+  default     = "aws-dogan-blog"
 }
 
 variable "bucket_tags" {
@@ -146,15 +154,10 @@ variable "redirect_protocol" {
   default     = "https"
 }
 
-variable "failover_bucket_name" {
-  type        = string
-  description = "awspr.dogandevops.clink"
-  default     = "awspr.dogandevops.clink"
-}
 variable "bucket_tag" {
   type        = string
   description = "Set key value tags for s3 bucket"
-  default     = "awspr.dogandevops.clink"
+  default     = "awsprd.dogandevops.clink"
 }
 variable "redirect_host_names" {
   type        = string
@@ -170,33 +173,26 @@ variable "redirect_protocoll" {
 variable "hosted_zone_id" {
   type        = string
   description = "dogandevops.clink hosted zone ID"
-  default     = "Z102278128A2ASDR3G41XFHYNZ" # Enter its unique ID for each zone hosted on Route53.
-}
-variable "ubuntu_ami" {
-  default = "ami-0c09e99c7d9bb3ec3"
-}
-
-variable "nat-ami" {
-  default = "ami-08c40ec9ead489470"
+  default     = "XXXXXXXXXXXXXXXXXXXXXX" # Enter its unique ID for each zone hosted on Route53.
 }
 
 
-variable "domain_name" {
-  default = "awspr.dogandevops.click" #  PLEASE ENTER YOUR DOMAİN NAME
-} 
+variable "domain_sub_name" {
+  default = "awsprd" #  PLEASE ENTER YOUR DOMAİN NAME
+}
 
 variable "subdomain_name" {
-  default = "awspr.dogandevops.click" #  PLEASE ENTER YOUR FULL SUBDOMAİN NAME
+  default = "awsprd.dogandevops.click" #  PLEASE ENTER YOUR FULL SUBDOMAİN NAME
 }
 variable "awsAccount" {
-  default = "XXXXXXXXXXXXX" # PLEASE ENTER YOUR AWS ACCOUNT ID WİTHOUT '-'
+  default = "XXXXXXXXXXXXXXXXXXXXXXX" # PLEASE ENTER YOUR AWS ACCOUNT ID WİTHOUT '-'
 }
 
 # düzenle
 
 
 variable "S3hostedzoneID" {
-  default = "Z3AQBSTGZDFYJSTF"
+  default = "XXXXXXXXXXXXXXXXXXXXXXXX"
 
 }
 
@@ -204,22 +200,7 @@ variable "S3websiteendpoint" {
   default = "s3-website-us-east-1.amazonaws.com"
 }
 
-# host
-#  ns-1394.awsdns-46.org.
-# ns-1913.awsdns-47.co.uk.
-# ns-390.awsdns-48.com.
-# ns-682.awsdns-21.net.
-
-
-
-# domain_name
-#  serversThe name servers that respond to DNS queries for this domain.
-# ns-542.awsdns-03.net
-# ns-1268.awsdns-30.org
-# ns-295.awsdns-36.com
-# ns-1550.awsdns-01.co.uk
-
 variable "aws_acm_certificate_arn" {
-  default = "arn:aws:acm:us-east-1:9533970585235658:certificate/5e1a24a3-6388-4383-855d-f822bbd4db0f"
+  default = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
 }
